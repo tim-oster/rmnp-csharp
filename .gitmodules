@@ -1,0 +1,3 @@
+[submodule "Crc32.NET"]
+	path = Crc32.NET
+	url = https://github.com/force-net/Crc32.NET
