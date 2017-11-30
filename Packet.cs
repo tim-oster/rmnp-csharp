@@ -63,7 +63,7 @@ namespace rmnp
 					}
 				}
 
-				return stream.GetBuffer();
+				return stream.ToArray();
 			}
 		}
 

@@ -53,6 +53,8 @@ namespace rmnp
 
 			this.connectionPool = new Pool<Connection>();
 			this.connectionPool.allocator = () => { return new Connection(); };
+
+			Background.Start();
 		}
 
 		// is blocking call!
@@ -64,6 +66,7 @@ namespace rmnp
 			foreach (Thread thread in this.listeners) thread.Join();
 
 			this.socket.Close();
+			Background.Stop();
 
 			this.address = null;
 			this.socket = null;
@@ -73,16 +76,17 @@ namespace rmnp
 			this.listeners = null;
 		}
 
-		internal void SetSocket()
+		internal void SetSocket(Socket socket)
 		{
-			this.socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-			this.socket.Bind(this.address);
+			this.socket = socket;
 			this.socket.SendBufferSize = Config.CfgMTU;
 			this.socket.ReceiveBufferSize = Config.CfgMTU;
 		}
 
 		internal void Listen()
 		{
+			this.isRunning = true;
+
 			for (int i = 0; i < Config.CfgParallelListenerCount; i++)
 			{
 				Thread thread = new Thread(new ThreadStart(this.ListeningWorker));
@@ -123,7 +127,7 @@ namespace rmnp
 					Interlocked.Add(ref Stats.StatReceivedBytes, length);
 					this.HandlePacket(addr, packet);
 				}
-				catch
+				catch (Exception e)
 				{
 					Interlocked.Increment(ref Stats.StatGoRoutinePanics);
 				}

@@ -34,7 +34,7 @@ namespace rmnp
 				try
 				{
 					length = socket.Receive(buffer);
-					addr = null;
+					addr = this.address;
 					next = true;
 				}
 				catch
@@ -84,9 +84,9 @@ namespace rmnp
 		// Client.ServerTimeout is called.
 		public void Start()
 		{
-			this.SetSocket();
+			this.SetSocket(new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp));
 			this.Listen();
-			this.Server = this.ConnectClient((IPEndPoint)this.socket.RemoteEndPoint);
+			this.Server = this.ConnectClient(this.address);
 		}
 
 		// Disconnect immediately disconnects from the server. It invokes no callbacks.

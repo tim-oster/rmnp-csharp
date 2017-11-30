@@ -38,7 +38,7 @@ namespace rmnp
 					}
 				}
 
-				action();
+				if (action != null) action();
 
 				Thread.Sleep(50);
 			}
