@@ -9,14 +9,13 @@ namespace rmnp
 		private ushort size;
 		private ushort[] sequences;
 		private bool[] states;
-		private object mutex;
+		private readonly object mutex = new object();
 
 		public SequenceBuffer(ushort size)
 		{
 			this.size = size;
 			this.sequences = new ushort[size];
 			this.states = new bool[size];
-			this.mutex = new object();
 		}
 
 		public void Reset()

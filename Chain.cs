@@ -22,12 +22,11 @@ namespace rmnp
 		private Link start;
 		private byte length;
 		private byte maxLength;
-		private object mutex;
+		private readonly object mutex = new object();
 
 		public Chain(byte maxLength)
 		{
 			this.maxLength = maxLength;
-			this.mutex = new object();
 		}
 
 		public void Reset()

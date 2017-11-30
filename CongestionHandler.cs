@@ -8,13 +8,13 @@ namespace rmnp
 	{
 		private enum Mode
 		{
-			None,
-			Good,
-			Bad
+			NONE,
+			GOOD,
+			BAD
 		}
 
 		private Mode mode;
-		private long rtt;
+		internal long rtt;
 
 		private long lastChangeTime;
 		private long requiredTime;
@@ -32,7 +32,7 @@ namespace rmnp
 
 		public void Reset()
 		{
-			this.ChangeMode(Mode.None);
+			this.ChangeMode(Mode.NONE);
 			this.rtt = 0;
 			this.requiredTime = Config.CfgDefaultCongestionRequiredTime;
 			this.unreliableCount = 0;
@@ -48,10 +48,10 @@ namespace rmnp
 
 			switch (this.mode)
 			{
-				case Mode.None:
-					this.ChangeMode(Mode.Good);
+				case Mode.NONE:
+					this.ChangeMode(Mode.GOOD);
 					break;
-				case Mode.Good:
+				case Mode.GOOD:
 					if (rtt > Config.CfgCongestionThreshold)
 					{
 						if (time - this.lastChangeTime <= Config.CfgBadRTTPunishTimeout)
@@ -59,7 +59,7 @@ namespace rmnp
 							this.requiredTime = Util.Min(Config.CfgMaxCongestionRequiredTime, this.requiredTime * 2);
 						}
 
-						this.ChangeMode(Mode.Bad);
+						this.ChangeMode(Mode.BAD);
 					}
 					else if (time - this.lastChangeTime >= Config.CfgGoodRTTRewardInterval)
 					{
@@ -68,7 +68,7 @@ namespace rmnp
 					}
 
 					break;
-				case Mode.Bad:
+				case Mode.BAD:
 					if (rtt > Config.CfgCongestionThreshold)
 					{
 						this.lastChangeTime = time;
@@ -76,7 +76,7 @@ namespace rmnp
 
 					if (time - this.lastChangeTime >= this.requiredTime)
 					{
-						this.ChangeMode(Mode.Good);
+						this.ChangeMode(Mode.GOOD);
 					}
 
 					break;
@@ -87,13 +87,13 @@ namespace rmnp
 		{
 			switch (mode)
 			{
-				case Mode.None:
-				case Mode.Good:
+				case Mode.NONE:
+				case Mode.GOOD:
 					this.resendTimeout = Config.CfgResendTimeout;
 					this.maxPacketResend = Config.CfgMaxPacketResends;
 					this.reackTimeout = Config.CfgReackTimeout;
 					break;
-				case Mode.Bad:
+				case Mode.BAD:
 					this.resendTimeout = (long)(Config.CfgResendTimeout * Config.CfgBadModeMultiplier);
 					this.maxPacketResend = (long)(Config.CfgMaxPacketResends * Config.CfgBadModeMultiplier);
 					this.reackTimeout = (long)(Config.CfgReackTimeout * Config.CfgBadModeMultiplier);
@@ -108,9 +108,9 @@ namespace rmnp
 		{
 			switch (this.mode)
 			{
-				case Mode.Good:
+				case Mode.GOOD:
 					return false;
-				case Mode.Bad:
+				case Mode.BAD:
 					this.unreliableCount++;
 					return this.unreliableCount % Config.CfgCongestionPacketReduction == 0;
 			}

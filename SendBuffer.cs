@@ -10,9 +10,9 @@ namespace rmnp
 	{
 		public enum Operation
 		{
-			Delete,
-			Cancel,
-			Continue
+			DELETE,
+			CANCEL,
+			CONTINUE
 		}
 
 		public class SendPacket
@@ -31,7 +31,7 @@ namespace rmnp
 
 		private SendBufferElement head;
 		private SendBufferElement tail;
-		private object mutex;
+		private readonly object mutex = new object();
 
 		public void Reset()
 		{
@@ -74,7 +74,7 @@ namespace rmnp
 			else e.next.prev = e.prev;
 		}
 
-		private SendPacket Retrieve(ushort sequence)
+		public SendPacket Retrieve(ushort sequence)
 		{
 			lock (this.mutex)
 			{
@@ -91,7 +91,7 @@ namespace rmnp
 			}
 		}
 
-		private void Iterate(Func<int, SendPacket, Operation> iterator)
+		public void Iterate(Func<int, SendPacket, Operation> iterator)
 		{
 			lock (this.mutex)
 			{
@@ -101,12 +101,12 @@ namespace rmnp
 				{
 					switch (iterator(i++, e.data))
 					{
-						case Operation.Delete:
+						case Operation.DELETE:
 							this.Remove(e);
 							break;
-						case Operation.Cancel:
+						case Operation.CANCEL:
 							return;
-						case Operation.Continue:
+						case Operation.CONTINUE:
 							break;
 					}
 				}
