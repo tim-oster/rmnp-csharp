@@ -11,14 +11,14 @@ namespace rmnp
 		private bool[] states;
 		private readonly object mutex = new object();
 
-		public SequenceBuffer(ushort size)
+		internal SequenceBuffer(ushort size)
 		{
 			this.size = size;
 			this.sequences = new ushort[size];
 			this.states = new bool[size];
 		}
 
-		public void Reset()
+		internal void Reset()
 		{
 			lock (this.mutex)
 			{
@@ -30,7 +30,7 @@ namespace rmnp
 			}
 		}
 
-		public bool Get(ushort sequence)
+		internal bool Get(ushort sequence)
 		{
 			lock (this.mutex)
 			{
@@ -43,7 +43,7 @@ namespace rmnp
 			}
 		}
 
-		public void Set(ushort sequence, bool value)
+		internal void Set(ushort sequence, bool value)
 		{
 			lock (this.mutex)
 			{

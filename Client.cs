@@ -34,7 +34,7 @@ namespace rmnp
 				try
 				{
 					length = socket.Receive(buffer);
-					addr = this.address;
+					addr = this.Address;
 					next = true;
 				}
 				catch
@@ -47,30 +47,31 @@ namespace rmnp
 
 			this.writeFunc = (Connection connection, ref byte[] buffer) =>
 			{
-				connection.conn.SendTo(buffer, connection.addr);
+				connection.Conn.SendTo(buffer, connection.Addr);
 			};
 
-			this.onConnect = (connection) =>
+			this.OnConnect = (connection) =>
 			{
 				if (this.ServerConnect != null) this.ServerConnect(connection);
 			};
 
-			this.onDisconnect = (connection) =>
+			this.OnDisconnect = (connection) =>
 			{
 				if (this.ServerDisconnect != null) this.ServerDisconnect(connection);
+				this.Destroy();
 			};
 
-			this.onTimeout = (connection) =>
+			this.OnTimeout = (connection) =>
 			{
 				if (this.ServerTimeout != null) this.ServerTimeout(connection);
 			};
 
-			this.onValidation = (connection, addr, packet) =>
+			this.OnValidation = (connection, addr, packet) =>
 			{
 				return false;
 			};
 
-			this.onPacket = (connection, packet) =>
+			this.OnPacket = (connection, packet) =>
 			{
 				if (this.PacketHandler != null) this.PacketHandler(connection, packet);
 			};
@@ -86,7 +87,7 @@ namespace rmnp
 		{
 			this.SetSocket(new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp));
 			this.Listen();
-			this.Server = this.ConnectClient(this.address);
+			this.Server = this.ConnectClient(this.Address);
 		}
 
 		// Disconnect immediately disconnects from the server. It invokes no callbacks.

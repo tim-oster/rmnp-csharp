@@ -6,7 +6,7 @@ namespace rmnp
 {
 	class Chain
 	{
-		public class Link
+		internal class Link
 		{
 			public Link next;
 			public Packet packet;
@@ -24,12 +24,12 @@ namespace rmnp
 		private byte maxLength;
 		private readonly object mutex = new object();
 
-		public Chain(byte maxLength)
+		internal Chain(byte maxLength)
 		{
 			this.maxLength = maxLength;
 		}
 
-		public void Reset()
+		internal void Reset()
 		{
 			lock (this.mutex)
 			{
@@ -40,7 +40,7 @@ namespace rmnp
 			}
 		}
 
-		public void ChainPacket(Packet packet)
+		internal void ChainPacket(Packet packet)
 		{
 			lock (this.mutex)
 			{
@@ -54,7 +54,7 @@ namespace rmnp
 		  
 					for (Link l = this.start; l != null; l = l.next)
 					{
-						if (Util.GreaterThanOrder(packet.order, l.packet.order)) link = l;
+						if (Util.GreaterThanOrder(packet.Order, l.packet.Order)) link = l;
 						else break;
 					}
 
@@ -72,7 +72,7 @@ namespace rmnp
 			}
 		}
 
-		public Link PopConsecutive()
+		internal Link PopConsecutive()
 		{
 			lock (this.mutex)
 			{
@@ -80,7 +80,7 @@ namespace rmnp
 
 				for (Link l = this.start; l != null; l = l.next)
 				{
-					if (l.packet.order == this.next)
+					if (l.packet.Order == this.next)
 					{
 						this.length--;
 						this.next++;
@@ -104,13 +104,13 @@ namespace rmnp
 			}
 		}
 
-		public void Skip()
+		internal void Skip()
 		{
 			lock (this.mutex)
 			{
 				if (this.start != null)
 				{
-					this.next = this.start.packet.order;
+					this.next = this.start.packet.Order;
 				}
 			}
 		}

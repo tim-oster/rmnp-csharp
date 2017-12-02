@@ -13,7 +13,7 @@ namespace rmnp
 		public static byte CfgProtocolId = 231;
 
 		// CfgParallelListenerCount is the amount of goroutines that will be spawned to listen on incoming requests.
-		public static int CfgParallelListenerCount = 4;
+		public static int CfgParallelListenerCount = 1;
 
 		// CfgMaxSendReceiveQueueSize is the max size of packets that can be queued up before they are processed.
 		public static int CfgMaxSendReceiveQueueSize = 100;

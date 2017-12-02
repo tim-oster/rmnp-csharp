@@ -16,7 +16,7 @@ namespace rmnp
 		private static bool isRunning;
 		private static Thread thread;
 
-		public static void Execute(Action action)
+		internal static void Execute(Action action)
 		{
 			lock (mutex)
 			{
@@ -39,24 +39,23 @@ namespace rmnp
 				}
 
 				if (action != null) action();
-
-				Thread.Sleep(50);
+				else Thread.Sleep(50);
 			}
 		}
 
-		public static void Start()
+		internal static void Start()
 		{
 			if (thread != null) return;
 
 			isRunning = true;
-			thread = new Thread(new ThreadStart(Update));
+			thread = new Thread(Update);
 			thread.Start();
 		}
 
-		public static void Stop()
+		internal static void Stop()
 		{
+			lock (mutex) actions.Clear();
 			isRunning = false;
-			thread.Join();
 			thread = null;
 		}
 	}

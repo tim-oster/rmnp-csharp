@@ -9,7 +9,7 @@ namespace rmnp
 {
 	class Packet
 	{
-		public enum Descriptor : byte
+		internal enum PacketDescriptor : byte
 		{
 			RELIABLE = (1 << 0),
 			ACK = (1 << 1),
@@ -19,47 +19,47 @@ namespace rmnp
 			DISCONNECT = (1 << 4)
 		}
 
-		public byte protocolId;
-		public uint crc32;
-		public byte descriptor;
+		internal byte ProtocolId;
+		internal uint Crc32;
+		internal byte Descriptor;
 
-		public ushort sequence;
-		public byte order;
+		internal ushort Sequence;
+		internal byte Order;
 
-		public ushort ack;
-		public uint ackBits;
+		internal ushort Ack;
+		internal uint AckBits;
 
-		public byte[] data;
+		internal byte[] Data;
 
-		public byte[] Serialize()
+		internal byte[] Serialize()
 		{
 			using (MemoryStream stream = new MemoryStream())
 			{
 				using (BinaryWriter writer = new BinaryWriter(stream))
 				{
-					writer.Write(this.protocolId);
-					writer.Write(this.crc32);
-					writer.Write(this.descriptor);
+					writer.Write(this.ProtocolId);
+					writer.Write(this.Crc32);
+					writer.Write(this.Descriptor);
 
-					if (this.Flag(Descriptor.RELIABLE) || this.Flag(Descriptor.ORDERED))
+					if (this.Flag(PacketDescriptor.RELIABLE) || this.Flag(PacketDescriptor.ORDERED))
 					{
-						writer.Write(this.sequence);
+						writer.Write(this.Sequence);
 					}
 
-					if (this.Flag(Descriptor.RELIABLE) && this.Flag(Descriptor.ORDERED))
+					if (this.Flag(PacketDescriptor.RELIABLE) && this.Flag(PacketDescriptor.ORDERED))
 					{
-						writer.Write(this.order);
+						writer.Write(this.Order);
 					}
 
-					if (this.Flag(Descriptor.ACK))
+					if (this.Flag(PacketDescriptor.ACK))
 					{
-						writer.Write(this.ack);
-						writer.Write(this.ackBits);
+						writer.Write(this.Ack);
+						writer.Write(this.AckBits);
 					}
 
-					if (this.data != null && this.data.Length > 0)
+					if (this.Data != null && this.Data.Length > 0)
 					{
-						writer.Write(this.data);
+						writer.Write(this.Data);
 					}
 				}
 
@@ -67,37 +67,37 @@ namespace rmnp
 			}
 		}
 
-		public bool Deserialize(byte[] packet)
+		internal bool Deserialize(byte[] packet)
 		{
 			try
 			{
 				using (MemoryStream stream = new MemoryStream(packet))
 				using (BinaryReader reader = new BinaryReader(stream))
 				{
-					this.protocolId = reader.ReadByte();
-					this.crc32 = reader.ReadUInt32();
-					this.descriptor = reader.ReadByte();
+					this.ProtocolId = reader.ReadByte();
+					this.Crc32 = reader.ReadUInt32();
+					this.Descriptor = reader.ReadByte();
 
-					if (this.Flag(Descriptor.RELIABLE) || this.Flag(Descriptor.ORDERED))
+					if (this.Flag(PacketDescriptor.RELIABLE) || this.Flag(PacketDescriptor.ORDERED))
 					{
-						this.sequence = reader.ReadUInt16();
+						this.Sequence = reader.ReadUInt16();
 					}
 
-					if (this.Flag(Descriptor.RELIABLE) && this.Flag(Descriptor.ORDERED))
+					if (this.Flag(PacketDescriptor.RELIABLE) && this.Flag(PacketDescriptor.ORDERED))
 					{
-						this.order = reader.ReadByte();
+						this.Order = reader.ReadByte();
 					}
 
-					if (this.Flag(Descriptor.ACK))
+					if (this.Flag(PacketDescriptor.ACK))
 					{
-						this.ack = reader.ReadUInt16();
-						this.ackBits = reader.ReadUInt32();
+						this.Ack = reader.ReadUInt16();
+						this.AckBits = reader.ReadUInt32();
 					}
 
 					int remaining = (int)(stream.Length - stream.Position);
 					if (remaining > 0)
 					{
-						this.data = reader.ReadBytes(remaining);
+						this.Data = reader.ReadBytes(remaining);
 					}
 
 					return true;
@@ -109,19 +109,19 @@ namespace rmnp
 			}
 		}
 
-		public void CalculateHash()
+		internal void CalculateHash()
 		{
-			this.crc32 = 0;
+			this.Crc32 = 0;
 			byte[] buffer = this.Serialize();
-			this.crc32 = Force.Crc32.Crc32Algorithm.Compute(buffer);
+			this.Crc32 = Force.Crc32.Crc32Algorithm.Compute(buffer);
 		}
 
-		public bool Flag(Descriptor flag)
+		internal bool Flag(PacketDescriptor flag)
 		{
-			return (this.descriptor & (byte)flag) != 0;
+			return (this.Descriptor & (byte)flag) != 0;
 		}
 
-		public static bool ValidateHeader(byte[] packet)
+		internal static bool ValidateHeader(byte[] packet)
 		{
 			// 1b protocolId + 4b crc32 + 1b descriptor
 			if (packet.Length < 6)
@@ -149,7 +149,7 @@ namespace rmnp
 			return hash1 == hash2;
 		}
 
-		public static int HeaderSize(byte[] packet)
+		internal static int HeaderSize(byte[] packet)
 		{
 			byte desc = packet[5];
 			int size = 0;
@@ -157,19 +157,19 @@ namespace rmnp
 			// protocolId (1) + crc (4) + descriptor (1)
 			size += 6;
 
-			if ((desc & (byte)Descriptor.RELIABLE) != 0 || (desc & (byte)Descriptor.ORDERED) != 0)
+			if ((desc & (byte)PacketDescriptor.RELIABLE) != 0 || (desc & (byte)PacketDescriptor.ORDERED) != 0)
 			{
 				// sequence (2)
 				size += 2;
 			}
 
-			if ((desc & (byte)Descriptor.RELIABLE) != 0 && (desc & (byte)Descriptor.ORDERED) != 0)
+			if ((desc & (byte)PacketDescriptor.RELIABLE) != 0 && (desc & (byte)PacketDescriptor.ORDERED) != 0)
 			{
 				// order (1)
 				size += 1;
 			}
 
-			if ((desc & (byte)Descriptor.ACK) != 0)
+			if ((desc & (byte)PacketDescriptor.ACK) != 0)
 			{
 				// ack (2) + ackBits (4)
 				size += 6;

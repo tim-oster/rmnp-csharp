@@ -12,15 +12,19 @@ namespace rmnp
 		private readonly object mutex = new object();
 		private Stack<T> objects = new Stack<T>();
 
-		public Func<T> allocator;
+		internal Func<T> Allocator;
 
-		public T Get()
+		internal Pool()
+		{
+		}
+
+		internal T Get()
 		{
 			lock (this.mutex)
 			{
 				if (this.objects.Count == 0)
 				{
-					return this.allocator();
+					return this.Allocator();
 				}
 				else
 				{
@@ -29,7 +33,7 @@ namespace rmnp
 			}
 		}
 
-		public void Put(T obj)
+		internal void Put(T obj)
 		{
 			lock (this.mutex)
 			{

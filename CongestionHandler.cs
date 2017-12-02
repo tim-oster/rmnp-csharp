@@ -14,37 +14,37 @@ namespace rmnp
 		}
 
 		private Mode mode;
-		internal long rtt;
+		internal long RTT;
 
 		private long lastChangeTime;
 		private long requiredTime;
 
 		private byte unreliableCount;
 
-		public long resendTimeout;
-		public long maxPacketResend;
-		public long reackTimeout;
+		internal long ResendTimeout;
+		internal long MaxPacketResend;
+		internal long ReackTimeout;
 
-		public CongestionHandler()
+		internal CongestionHandler()
 		{
 			this.Reset();
 		}
 
-		public void Reset()
+		internal void Reset()
 		{
 			this.ChangeMode(Mode.NONE);
-			this.rtt = 0;
+			this.RTT = 0;
 			this.requiredTime = Config.CfgDefaultCongestionRequiredTime;
 			this.unreliableCount = 0;
 		}
 
-		public void Check(long sendTime)
+		internal void Check(long sendTime)
 		{
 			long time = Util.CurrentTime();
 			long rtt = time - sendTime;
 
-			if (this.rtt == 0) this.rtt = rtt;
-			else this.rtt += (long)((rtt - this.rtt) * Config.CfgRTTSmoothFactor);
+			if (this.RTT == 0) this.RTT = rtt;
+			else this.RTT += (long)((rtt - this.RTT) * Config.CfgRTTSmoothFactor);
 
 			switch (this.mode)
 			{
@@ -89,14 +89,14 @@ namespace rmnp
 			{
 				case Mode.NONE:
 				case Mode.GOOD:
-					this.resendTimeout = Config.CfgResendTimeout;
-					this.maxPacketResend = Config.CfgMaxPacketResends;
-					this.reackTimeout = Config.CfgReackTimeout;
+					this.ResendTimeout = Config.CfgResendTimeout;
+					this.MaxPacketResend = Config.CfgMaxPacketResends;
+					this.ReackTimeout = Config.CfgReackTimeout;
 					break;
 				case Mode.BAD:
-					this.resendTimeout = (long)(Config.CfgResendTimeout * Config.CfgBadModeMultiplier);
-					this.maxPacketResend = (long)(Config.CfgMaxPacketResends * Config.CfgBadModeMultiplier);
-					this.reackTimeout = (long)(Config.CfgReackTimeout * Config.CfgBadModeMultiplier);
+					this.ResendTimeout = (long)(Config.CfgResendTimeout * Config.CfgBadModeMultiplier);
+					this.MaxPacketResend = (long)(Config.CfgMaxPacketResends * Config.CfgBadModeMultiplier);
+					this.ReackTimeout = (long)(Config.CfgReackTimeout * Config.CfgBadModeMultiplier);
 					break;
 			}
 
@@ -104,7 +104,7 @@ namespace rmnp
 			this.lastChangeTime = Util.CurrentTime();
 		}
 
-		public bool ShouldDropUnreliable()
+		internal bool ShouldDropUnreliable()
 		{
 			switch (this.mode)
 			{

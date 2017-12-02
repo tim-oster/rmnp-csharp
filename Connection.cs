@@ -11,7 +11,7 @@ namespace rmnp
 {
 	class Connection
 	{
-		public enum State
+		public enum ConnectionState
 		{
 			DISCONNECTED,
 			CONNECTING,
@@ -19,10 +19,10 @@ namespace rmnp
 		}
 
 		private RMNP protocol;
-		internal State state;
+		public ConnectionState State;
 
-		public Socket conn;
-		public IPEndPoint addr;
+		public Socket Conn;
+		public IPEndPoint Addr;
 
 		// for threading
 		private bool isRunning;
@@ -49,31 +49,29 @@ namespace rmnp
 		private CongestionHandler congestionHandler;
 
 		private readonly object sendQueueMutex = new object();
-		internal readonly object recvQueueMutex = new object();
 		private Queue<Packet> sendQueue;
-		internal Queue<byte[]> recvQueue;
+		// no need for recvQeue because packets are handled in place
 
 		// Values allow to store custom data for fast and easy packet handling.
 		public Dictionary<string, object> values;
 
-		public Connection()
+		internal Connection()
 		{
-			this.state = State.DISCONNECTED;
+			this.State = ConnectionState.DISCONNECTED;
 			this.orderedChain = new Chain(Config.CfgMaxPacketChainLength);
 			this.sendBuffer = new SendBuffer();
 			this.receiveBuffer = new SequenceBuffer(Config.CfgSequenceBufferSize);
 			this.congestionHandler = new CongestionHandler();
 			this.sendQueue = new Queue<Packet>();
-			this.recvQueue = new Queue<byte[]>();
 			this.values = new Dictionary<string, object>();
 		}
 
-		public void Init(RMNP impl, IPEndPoint addr)
+		internal void Init(RMNP impl, IPEndPoint addr)
 		{
 			this.protocol = impl;
-			this.conn = impl.socket;
-			this.addr = addr;
-			this.state = State.CONNECTING;
+			this.Conn = impl.Socket;
+			this.Addr = addr;
+			this.State = ConnectionState.CONNECTING;
 
 			long t = Util.CurrentTime();
 			this.lastAckSendTime = t;
@@ -81,13 +79,13 @@ namespace rmnp
 			this.lastReceivedTime = t;
 		}
 
-		public void Reset()
+		internal void Reset()
 		{
 			this.protocol = null;
-			this.state = State.DISCONNECTED;
+			this.State = ConnectionState.DISCONNECTED;
 
-			this.conn = null;
-			this.addr = null;
+			this.Conn = null;
+			this.Addr = null;
 
 			this.orderedChain.Reset();
 			this.sendBuffer.Reset();
@@ -109,14 +107,13 @@ namespace rmnp
 			this.pingPacketInterval = 0;
 
 			lock (this.sendQueueMutex) this.sendQueue.Clear();
-			lock (this.recvQueueMutex) this.recvQueue.Clear();
 
 			this.values.Clear();
 		}
 
-		public void StartRoutines()
+		internal void StartRoutines()
 		{
-			this.thread = new Thread(new ThreadStart(() =>
+			this.thread = new Thread(() =>
 			{
 				Interlocked.Increment(ref Stats.StatRunningGoRoutines);
 
@@ -125,7 +122,7 @@ namespace rmnp
 					try
 					{
 						this.SendUpdate();
-						this.ReceiveUpdate();
+						//this.ReceiveUpdate();
 						this.KeepAlive();
 					}
 					catch
@@ -135,13 +132,13 @@ namespace rmnp
 				}
 
 				Interlocked.Decrement(ref Stats.StatRunningGoRoutines);
-			}));
+			});
 
 			this.isRunning = true;
 			this.thread.Start();
 		}
 
-		public void StopRoutines()
+		internal void StopRoutines()
 		{
 			this.isRunning = false;
 			this.thread.Join();
@@ -149,25 +146,24 @@ namespace rmnp
 
 		private void SendUpdate()
 		{
-			Thread.Sleep((int)Config.CfgUpdateLoopTimeout);
+			Packet toSend = null;
 
-			lock (this.sendQueue)
+			lock (this.sendQueueMutex)
 			{
-				if (this.sendQueue.Count > 0)
-				{
-					this.ProcessSend(this.sendQueue.Dequeue(), false);
-				}
+				if (this.sendQueue.Count > 0) toSend = this.sendQueue.Dequeue();
 			}
 
-			long currentTime = Util.CurrentTime();
+			if (toSend != null) this.ProcessSend(toSend, false);
+			else Thread.Sleep((int)Config.CfgUpdateLoopTimeout);
 
-			if (currentTime - this.lastResendTime > this.congestionHandler.resendTimeout)
+			long currentTime = Util.CurrentTime();
+			if (currentTime - this.lastResendTime > this.congestionHandler.ResendTimeout)
 			{
 				this.lastResendTime = currentTime;
 
 				this.sendBuffer.Iterate((i, data) =>
 				{
-					if (i >= this.congestionHandler.maxPacketResend) return SendBuffer.Operation.CANCEL;
+					if (i >= this.congestionHandler.MaxPacketResend) return SendBuffer.Operation.CANCEL;
 
 					if (currentTime - data.sendTime > Config.CfgSendRemoveTimeout) return SendBuffer.Operation.DELETE;
 					else this.ProcessSend(data.packet, true);
@@ -176,7 +172,7 @@ namespace rmnp
 				});
 			}
 
-			if (this.state != State.CONNECTED) return;
+			if (this.State != ConnectionState.CONNECTED) return;
 
 			if (currentTime - this.lastChainTime > Config.CfgChainSkipTimeout)
 			{
@@ -184,13 +180,13 @@ namespace rmnp
 				this.HandleNextChainSequence();
 			}
 
-			if (currentTime - this.lastAckSendTime > this.congestionHandler.reackTimeout)
+			if (currentTime - this.lastAckSendTime > this.congestionHandler.ReackTimeout)
 			{
 				this.SendAckPacket();
 
 				if (this.pingPacketInterval % Config.CfgAutoPingInterval == 0)
 				{
-					this.SendLowLevelPacket(Packet.Descriptor.RELIABLE | Packet.Descriptor.ACK);
+					this.SendLowLevelPacket(Packet.PacketDescriptor.RELIABLE | Packet.PacketDescriptor.ACK);
 					this.pingPacketInterval = 0;
 				}
 
@@ -200,20 +196,14 @@ namespace rmnp
 
 		private void ReceiveUpdate()
 		{
-			lock (this.recvQueueMutex)
-			{
-				if (this.recvQueue.Count > 0)
-				{
-					this.ProcessReceive(this.recvQueue.Dequeue());
-				}
-			}
+			// not used (is implemented as direct call instead of threading)
 		}
 
 		private void KeepAlive()
 		{
 			// case < -time.After(CfgTimeoutThreshold * (time.Millisecond / 2)):
 
-			if (this.state == State.DISCONNECTED)
+			if (this.State == ConnectionState.DISCONNECTED)
 			{
 				return;
 			}
@@ -224,34 +214,34 @@ namespace rmnp
 			{
 				// needs to be executed in goroutine; otherwise this method could not exit and therefore deadlock
 				// the connection's waitGroup
-				Background.Execute(() => this.protocol.TimeoutClient(this));
+				Background.Execute(() => { if (this.protocol != null) this.protocol.TimeoutClient(this); });
 			}
 		}
 
-		private void ProcessReceive(byte[] buffer)
+		internal void ProcessReceive(byte[] buffer)
 		{
 			this.lastReceivedTime = Util.CurrentTime();
 
 			Packet p = new Packet();
 			if (!p.Deserialize(buffer)) return;
-			if (p.Flag(Packet.Descriptor.RELIABLE) && !this.HandleReliablePacket(p)) return;
-			if (p.Flag(Packet.Descriptor.ACK) && !this.HandleAckPacket(p)) return;
-			if (p.Flag(Packet.Descriptor.ORDERED) && !this.HandleOrderedPacket(p)) return;
+			if (p.Flag(Packet.PacketDescriptor.RELIABLE) && !this.HandleReliablePacket(p)) return;
+			if (p.Flag(Packet.PacketDescriptor.ACK) && !this.HandleAckPacket(p)) return;
+			if (p.Flag(Packet.PacketDescriptor.ORDERED) && !this.HandleOrderedPacket(p)) return;
 			this.Process(p);
 		}
 
 		private bool HandleReliablePacket(Packet packet)
 		{
-			if (this.receiveBuffer.Get(packet.sequence))
+			if (this.receiveBuffer.Get(packet.Sequence))
 			{
 				return false;
 			}
 
-			this.receiveBuffer.Set(packet.sequence, true);
+			this.receiveBuffer.Set(packet.Sequence, true);
 
-			if (Util.GreaterThanSequence(packet.sequence, this.remoteSequence) && Util.DifferenceSequence(packet.sequence, this.remoteSequence) <= Config.CfgMaxSkippedPackets)
+			if (Util.GreaterThanSequence(packet.Sequence, this.remoteSequence) && Util.DifferenceSequence(packet.Sequence, this.remoteSequence) <= Config.CfgMaxSkippedPackets)
 			{
-				this.remoteSequence = packet.sequence;
+				this.remoteSequence = packet.Sequence;
 			}
 
 			this.ackBits = 0;
@@ -270,17 +260,16 @@ namespace rmnp
 
 		private bool HandleOrderedPacket(Packet packet)
 		{
-			if (packet.Flag(Packet.Descriptor.RELIABLE))
+			if (packet.Flag(Packet.PacketDescriptor.RELIABLE))
 			{
-
 				this.orderedChain.ChainPacket(packet);
 				this.HandleNextChainSequence();
 			}
 			else
 			{
-				if (Util.GreaterThanSequence(packet.sequence, this.remoteUnreliableSequence))
+				if (Util.GreaterThanSequence(packet.Sequence, this.remoteUnreliableSequence))
 				{
-					this.remoteUnreliableSequence = packet.sequence;
+					this.remoteUnreliableSequence = packet.Sequence;
 					return true;
 				}
 			}
@@ -292,9 +281,9 @@ namespace rmnp
 		{
 			for (ushort i = 0; i <= 32; i++)
 			{
-				if (i == 0 || (packet.ackBits & (1 << (i - 1))) != 0)
+				if (i == 0 || (packet.AckBits & (1 << (i - 1))) != 0)
 				{
-					ushort s = (ushort)(packet.ack - i);
+					ushort s = (ushort)(packet.Ack - i);
 					SendBuffer.SendPacket sp = this.sendBuffer.Retrieve(s);
 					if (sp != null && !sp.noRTT) this.congestionHandler.Check(sp.sendTime);
 				}
@@ -305,9 +294,9 @@ namespace rmnp
 
 		private void Process(Packet packet)
 		{
-			if (packet.data != null && packet.data.Length > 0)
+			if (packet.Data != null && packet.Data.Length > 0)
 			{
-				this.protocol.onPacket(this, packet.data);
+				this.protocol.OnPacket(this, packet.Data);
 			}
 		}
 
@@ -323,40 +312,40 @@ namespace rmnp
 
 		private void ProcessSend(Packet packet, bool resend)
 		{
-			if (!packet.Flag(Packet.Descriptor.RELIABLE) && this.congestionHandler.ShouldDropUnreliable())
+			if (!packet.Flag(Packet.PacketDescriptor.RELIABLE) && this.congestionHandler.ShouldDropUnreliable())
 			{
 				return;
 			}
 
-			packet.protocolId = Config.CfgProtocolId;
+			packet.ProtocolId = Config.CfgProtocolId;
 
 			if (!resend)
 			{
-				if (packet.Flag(Packet.Descriptor.RELIABLE))
+				if (packet.Flag(Packet.PacketDescriptor.RELIABLE))
 				{
-					packet.sequence = this.localSequence;
+					packet.Sequence = this.localSequence;
 					this.localSequence++;
 
-					if (packet.Flag(Packet.Descriptor.ORDERED))
+					if (packet.Flag(Packet.PacketDescriptor.ORDERED))
 					{
-						packet.order = this.orderedSequence;
+						packet.Order = this.orderedSequence;
 						this.orderedSequence++;
 					}
 
-					this.sendBuffer.Add(packet, this.state != State.CONNECTED);
+					this.sendBuffer.Add(packet, this.State != ConnectionState.CONNECTED);
 				}
-				else if (packet.Flag(Packet.Descriptor.ORDERED))
+				else if (packet.Flag(Packet.PacketDescriptor.ORDERED))
 				{
-					packet.sequence = this.localUnreliableSequence;
+					packet.Sequence = this.localUnreliableSequence;
 					this.localUnreliableSequence++;
 				}
 			}
 
-			if (packet.Flag(Packet.Descriptor.ACK))
+			if (packet.Flag(Packet.PacketDescriptor.ACK))
 			{
 				this.lastAckSendTime = Util.CurrentTime();
-				packet.ack = this.remoteSequence;
-				packet.ackBits = this.ackBits;
+				packet.Ack = this.remoteSequence;
+				packet.AckBits = this.ackBits;
 			}
 
 			packet.CalculateHash();
@@ -373,22 +362,22 @@ namespace rmnp
 			}
 		}
 
-		internal void SendLowLevelPacket(Packet.Descriptor descriptor)
+		internal void SendLowLevelPacket(Packet.PacketDescriptor descriptor)
 		{
 			this.SendHighLevelPacket(descriptor, null);
 		}
 
-		private void SendHighLevelPacket(Packet.Descriptor descriptor, byte[] data)
+		private void SendHighLevelPacket(Packet.PacketDescriptor descriptor, byte[] data)
 		{
 			Packet packet = new Packet();
-			packet.descriptor = (byte)descriptor;
-			packet.data = data;
+			packet.Descriptor = (byte)descriptor;
+			packet.Data = data;
 			this.SendPacket(packet);
 		}
 
 		private void SendAckPacket()
 		{
-			this.SendLowLevelPacket(Packet.Descriptor.ACK);
+			this.SendLowLevelPacket(Packet.PacketDescriptor.ACK);
 		}
 
 		// SendUnreliable sends the data with no guarantee whether it arrives or not.
@@ -403,7 +392,7 @@ namespace rmnp
 		// ones.
 		public void SendUnreliableOrdered(byte[] data)
 		{
-			this.SendHighLevelPacket(Packet.Descriptor.ORDERED, data);
+			this.SendHighLevelPacket(Packet.PacketDescriptor.ORDERED, data);
 		}
 
 		// SendReliable send the data and guarantees that the data arrives.
@@ -411,7 +400,7 @@ namespace rmnp
 		// This method is not 100% reliable. (Read more in README)
 		public void SendReliable(byte[] data)
 		{
-			this.SendHighLevelPacket(Packet.Descriptor.RELIABLE | Packet.Descriptor.ACK, data);
+			this.SendHighLevelPacket(Packet.PacketDescriptor.RELIABLE | Packet.PacketDescriptor.ACK, data);
 		}
 
 		// SendReliableOrdered is the same as SendReliable but guarantees that packets
@@ -419,13 +408,13 @@ namespace rmnp
 		// This method is not 100% reliable. (Read more in README)
 		public void SendReliableOrdered(byte[] data)
 		{
-			this.SendHighLevelPacket(Packet.Descriptor.RELIABLE | Packet.Descriptor.ACK | Packet.Descriptor.ORDERED, data);
+			this.SendHighLevelPacket(Packet.PacketDescriptor.RELIABLE | Packet.PacketDescriptor.ACK | Packet.PacketDescriptor.ORDERED, data);
 		}
 
 		// GetPing returns the current ping to this connection's socket
 		public short GetPing()
 		{
-			return (short)(this.congestionHandler.rtt / 2);
+			return (short)(this.congestionHandler.RTT / 2);
 		}
 	}
 }

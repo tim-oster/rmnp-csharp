@@ -48,30 +48,30 @@ namespace rmnp
 
 			this.writeFunc = (Connection connection, ref byte[] buffer) =>
 			{
-				connection.conn.SendTo(buffer, connection.addr);
+				connection.Conn.SendTo(buffer, connection.Addr);
 			};
 
-			this.onConnect = (connection) =>
+			this.OnConnect = (connection) =>
 			{
 				if (this.ClientConnect != null) this.ClientConnect(connection);
 			};
 
-			this.onDisconnect = (connection) =>
+			this.OnDisconnect = (connection) =>
 			{
 				if (this.ClientDisconnect != null) this.ClientDisconnect(connection);
 			};
 
-			this.onTimeout = (connection) =>
+			this.OnTimeout = (connection) =>
 			{
 				if (this.ClientTimeout != null) this.ClientTimeout(connection);
 			};
 
-			this.onValidation = (connection, addr, packet) =>
+			this.OnValidation = (connection, addr, packet) =>
 			{
 				return this.ClientValidation != null ? this.ClientValidation(connection, addr, packet) : true;
 			};
 
-			this.onPacket = (connection, packet) =>
+			this.OnPacket = (connection, packet) =>
 			{
 				if (this.PacketHandler != null) this.PacketHandler(connection, packet);
 			};
@@ -84,8 +84,7 @@ namespace rmnp
 		public void Start()
 		{
 			Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-			socket.Bind(this.address);
-			this.SetSocket(socket);
+			socket.Bind(this.Address);
 			this.Listen();
 		}
 

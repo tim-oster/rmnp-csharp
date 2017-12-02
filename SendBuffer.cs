@@ -8,21 +8,21 @@ namespace rmnp
 {
 	class SendBuffer
 	{
-		public enum Operation
+		internal enum Operation
 		{
 			DELETE,
 			CANCEL,
 			CONTINUE
 		}
 
-		public class SendPacket
+		internal class SendPacket
 		{
 			public Packet packet;
 			public long sendTime;
 			public bool noRTT;
 		}
 
-		public class SendBufferElement
+		internal class SendBufferElement
 		{
 			public SendBufferElement next;
 			public SendBufferElement prev;
@@ -33,7 +33,7 @@ namespace rmnp
 		private SendBufferElement tail;
 		private readonly object mutex = new object();
 
-		public void Reset()
+		internal void Reset()
 		{
 			lock (this.mutex)
 			{
@@ -42,7 +42,7 @@ namespace rmnp
 			}
 		}
 
-		public void Add(Packet packet, bool noRTT)
+		internal void Add(Packet packet, bool noRTT)
 		{
 			lock (this.mutex)
 			{
@@ -74,13 +74,13 @@ namespace rmnp
 			else e.next.prev = e.prev;
 		}
 
-		public SendPacket Retrieve(ushort sequence)
+		internal SendPacket Retrieve(ushort sequence)
 		{
 			lock (this.mutex)
 			{
 				for (SendBufferElement e = this.head; e != null; e = e.next)
 				{
-					if (e.data.packet.sequence == sequence)
+					if (e.data.packet.Sequence == sequence)
 					{
 						this.Remove(e);
 						return e.data;
@@ -91,7 +91,7 @@ namespace rmnp
 			}
 		}
 
-		public void Iterate(Func<int, SendPacket, Operation> iterator)
+		internal void Iterate(Func<int, SendPacket, Operation> iterator)
 		{
 			lock (this.mutex)
 			{
