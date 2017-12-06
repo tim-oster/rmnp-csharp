@@ -32,11 +32,11 @@ namespace rmnp
 
 		// callbacks
 		// for clients: only executed if client is still connected. if client disconnects callback will not be executed.
-		internal Action<Connection> OnConnect;
-		internal Action<Connection> OnDisconnect;
-		internal Action<Connection> OnTimeout;
-		internal Func<Connection, IPEndPoint, byte[], bool> OnValidation;
-		internal Action<Connection, byte[]> OnPacket;
+		internal Action<Connection, byte[]> OnConnect;
+		internal Action<Connection, byte[]> OnDisconnect;
+		internal Action<Connection, byte[]> OnTimeout;
+		internal Func<IPEndPoint, byte[], bool> OnValidation;
+		internal Action<Connection, byte[], Connection.Channel> OnPacket;
 
 		protected void Init(string address)
 		{
@@ -60,7 +60,12 @@ namespace rmnp
 		// is blocking call!
 		protected void Destroy()
 		{
-			foreach (Connection conn in this.connections.Values) this.DisconnectClient(conn, true);
+			if (this.Address == null) return;
+
+			lock (this.connectionsMutex)
+			{
+				foreach (Connection conn in new List<Connection>(this.connections.Values)) this.DisconnectClient(conn, true, null);
+			}
 
 			this.isRunning = false;
 			foreach (Thread thread in this.listeners) thread.Join();
@@ -152,25 +157,27 @@ namespace rmnp
 
 				int header = Packet.HeaderSize(packet);
 
-				if (this.OnValidation != null && !this.OnValidation(null, addr, packet.Skip(header).ToArray()))
+				if (this.OnValidation != null && !this.OnValidation(addr, packet.Skip(header).ToArray()))
 				{
 					Interlocked.Increment(ref Stats.StatDeniedConnects);
 					return;
 				}
 
-				connection = this.ConnectClient(addr);
+				connection = this.ConnectClient(addr, null);
 			}
 
 			// done this way to ensure that connect callback is executed on client-side
 			if (connection.State != Connection.ConnectionState.CONNECTED && (packet[5] & (byte)Packet.PacketDescriptor.CONNECT) != 0)
 			{
-				if (this.OnConnect != null) this.OnConnect(connection);
+				int header = Packet.HeaderSize(packet);
+				if (this.OnConnect != null) this.OnConnect(connection, packet.Skip(header).ToArray());
 				connection.State = Connection.ConnectionState.CONNECTED;
 			}
 
 			if ((packet[5] & (byte)Packet.PacketDescriptor.DISCONNECT) != 0)
 			{
-				this.DisconnectClient(connection, false);
+				int header = Packet.HeaderSize(packet);
+				this.DisconnectClient(connection, false, packet.Skip(header).ToArray());
 				return;
 			}
 
@@ -178,7 +185,7 @@ namespace rmnp
 			connection.ProcessReceive(packet);
 		}
 
-		internal Connection ConnectClient(IPEndPoint addr)
+		internal Connection ConnectClient(IPEndPoint addr, byte[] data)
 		{
 			Interlocked.Increment(ref Stats.StatConnects);
 
@@ -191,13 +198,13 @@ namespace rmnp
 			this.connections.Add(hash, connection);
 			this.connectionsMutex.ExitWriteLock();
 
-			connection.SendLowLevelPacket(Packet.PacketDescriptor.RELIABLE | Packet.PacketDescriptor.CONNECT);
+			connection.SendHighLevelPacket(Packet.PacketDescriptor.RELIABLE | Packet.PacketDescriptor.CONNECT, data);
 			connection.StartRoutines();
 
 			return connection;
 		}
 
-		private void DisconnectClient(Connection connection, bool shutdown)
+		private void DisconnectClient(Connection connection, bool shutdown, byte[] packet)
 		{
 			if (connection.State == Connection.ConnectionState.DISCONNECTED) return;
 
@@ -206,7 +213,7 @@ namespace rmnp
 			connection.State = Connection.ConnectionState.DISCONNECTED;
 
 			// send more than necessary so that the packet hopefully arrives
-			for (int i = 0; i < 10; i++) connection.SendLowLevelPacket(Packet.PacketDescriptor.DISCONNECT);
+			for (int i = 0; i < 10; i++) connection.SendHighLevelPacket(Packet.PacketDescriptor.DISCONNECT, packet);
 
 			// give the channel some time to process the packets
 			Thread.Sleep(20);
@@ -219,7 +226,7 @@ namespace rmnp
 			this.connections.Remove(hash);
 			this.connectionsMutex.ExitWriteLock();
 
-			if (!shutdown && this.OnDisconnect != null) this.OnDisconnect(connection);
+			if (!shutdown && this.OnDisconnect != null) this.OnDisconnect(connection, packet);
 
 			connection.Reset();
 			this.connectionPool.Put(connection);
@@ -228,8 +235,8 @@ namespace rmnp
 		internal void TimeoutClient(Connection connection)
 		{
 			Interlocked.Increment(ref Stats.StatTimeouts);
-			if (this.OnTimeout != null) this.OnTimeout(connection);
-			this.DisconnectClient(connection, false);
+			if (this.OnTimeout != null) this.OnTimeout(connection, null);
+			this.DisconnectClient(connection, false, null);
 		}
 	}
 }

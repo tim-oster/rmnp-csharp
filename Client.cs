@@ -14,16 +14,16 @@ namespace rmnp
 		public Connection Server;
 
 		// ServerConnect is called when a connection to the server was established.
-		public Action<Connection> ServerConnect;
+		public Action<Connection, byte[]> ServerConnect;
 
 		// ServerDisconnect is called when the server disconnected the client.
-		public Action<Connection> ServerDisconnect;
+		public Action<Connection, byte[]> ServerDisconnect;
 
 		// ServerTimeout is called when the connection to the server timed out.
-		public Action<Connection> ServerTimeout;
+		public Action<Connection, byte[]> ServerTimeout;
 
 		// PacketHandler is called when packets arrive to handle the received data.
-		public Action<Connection, byte[]> PacketHandler;
+		public Action<Connection, byte[], Connection.Channel> PacketHandler;
 
 		// NewClient creates and returns a new Client instance that will try to connect
 		// to the given server address. It does not connect automatically.
@@ -50,30 +50,30 @@ namespace rmnp
 				connection.Conn.SendTo(buffer, connection.Addr);
 			};
 
-			this.OnConnect = (connection) =>
+			this.OnConnect = (connection, packet) =>
 			{
-				if (this.ServerConnect != null) this.ServerConnect(connection);
+				if (this.ServerConnect != null) this.ServerConnect(connection, packet);
 			};
 
-			this.OnDisconnect = (connection) =>
+			this.OnDisconnect = (connection, packet) =>
 			{
-				if (this.ServerDisconnect != null) this.ServerDisconnect(connection);
+				if (this.ServerDisconnect != null) this.ServerDisconnect(connection, packet);
 				this.Destroy();
 			};
 
-			this.OnTimeout = (connection) =>
+			this.OnTimeout = (connection, packet) =>
 			{
-				if (this.ServerTimeout != null) this.ServerTimeout(connection);
+				if (this.ServerTimeout != null) this.ServerTimeout(connection, packet);
 			};
 
-			this.OnValidation = (connection, addr, packet) =>
+			this.OnValidation = (addr, packet) =>
 			{
 				return false;
 			};
 
-			this.OnPacket = (connection, packet) =>
+			this.OnPacket = (connection, packet, channel) =>
 			{
-				if (this.PacketHandler != null) this.PacketHandler(connection, packet);
+				if (this.PacketHandler != null) this.PacketHandler(connection, packet, channel);
 			};
 
 			this.Init(server);
@@ -83,16 +83,16 @@ namespace rmnp
 		// On successful connection the Client.ServerConnect callback is invoked.
 		// If no connection can be established after CfgTimeoutThreshold milliseconds
 		// Client.ServerTimeout is called.
-		public void Start()
+		public void Connect(byte[] data)
 		{
 			this.SetSocket(new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp));
 			this.Listen();
-			this.Server = this.ConnectClient(this.Address);
+			this.Server = this.ConnectClient(this.Address, data);
 		}
 
 		// Disconnect immediately disconnects from the server. It invokes no callbacks.
 		// This call could take some time because it waits for goroutines to exit.
-		public void Stop()
+		public void Disconnect()
 		{
 			this.Destroy();
 			this.Server = null;

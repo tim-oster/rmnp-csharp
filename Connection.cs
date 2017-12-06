@@ -9,13 +9,21 @@ using System.Threading;
 
 namespace rmnp
 {
-	class Connection
+	public class Connection
 	{
 		public enum ConnectionState
 		{
 			DISCONNECTED,
 			CONNECTING,
 			CONNECTED
+		}
+
+		public enum Channel
+		{
+			UNRELIABLE,
+			UNRELIABLE_ORDERED,
+			RELIABLE,
+			RELIABLE_ORDERED
 		}
 
 		private RMNP protocol;
@@ -53,7 +61,7 @@ namespace rmnp
 		// no need for recvQeue because packets are handled in place
 
 		// Values allow to store custom data for fast and easy packet handling.
-		public Dictionary<string, object> values;
+		public Dictionary<byte, object> values;
 
 		internal Connection()
 		{
@@ -63,7 +71,7 @@ namespace rmnp
 			this.receiveBuffer = new SequenceBuffer(Config.CfgSequenceBufferSize);
 			this.congestionHandler = new CongestionHandler();
 			this.sendQueue = new Queue<Packet>();
-			this.values = new Dictionary<string, object>();
+			this.values = new Dictionary<byte, object>();
 		}
 
 		internal void Init(RMNP impl, IPEndPoint addr)
@@ -227,7 +235,21 @@ namespace rmnp
 			if (p.Flag(Packet.PacketDescriptor.RELIABLE) && !this.HandleReliablePacket(p)) return;
 			if (p.Flag(Packet.PacketDescriptor.ACK) && !this.HandleAckPacket(p)) return;
 			if (p.Flag(Packet.PacketDescriptor.ORDERED) && !this.HandleOrderedPacket(p)) return;
-			this.Process(p);
+
+			Channel channel;
+
+			if (p.Flag(Packet.PacketDescriptor.RELIABLE))
+			{
+				if (p.Flag(Packet.PacketDescriptor.ORDERED)) channel = Channel.RELIABLE_ORDERED;
+				else channel = Channel.RELIABLE;
+			}
+			else
+			{
+				if (p.Flag(Packet.PacketDescriptor.ORDERED)) channel = Channel.UNRELIABLE_ORDERED;
+				else channel = Channel.UNRELIABLE;
+			}
+
+			this.Process(p, channel);
 		}
 
 		private bool HandleReliablePacket(Packet packet)
@@ -292,11 +314,11 @@ namespace rmnp
 			return true;
 		}
 
-		private void Process(Packet packet)
+		private void Process(Packet packet, Channel channel)
 		{
 			if (packet.Data != null && packet.Data.Length > 0)
 			{
-				this.protocol.OnPacket(this, packet.Data);
+				this.protocol.OnPacket(this, packet.Data, channel);
 			}
 		}
 
@@ -306,7 +328,7 @@ namespace rmnp
 
 			for (Chain.Link l = this.orderedChain.PopConsecutive(); l != null; l = l.next)
 			{
-				this.Process(l.packet);
+				this.Process(l.packet, Channel.RELIABLE_ORDERED);
 			}
 		}
 
@@ -367,7 +389,7 @@ namespace rmnp
 			this.SendHighLevelPacket(descriptor, null);
 		}
 
-		private void SendHighLevelPacket(Packet.PacketDescriptor descriptor, byte[] data)
+		internal void SendHighLevelPacket(Packet.PacketDescriptor descriptor, byte[] data)
 		{
 			Packet packet = new Packet();
 			packet.Descriptor = (byte)descriptor;
@@ -409,6 +431,27 @@ namespace rmnp
 		public void SendReliableOrdered(byte[] data)
 		{
 			this.SendHighLevelPacket(Packet.PacketDescriptor.RELIABLE | Packet.PacketDescriptor.ACK | Packet.PacketDescriptor.ORDERED, data);
+		}
+
+		// SendOnChannel sends the data on the given channel using the dedicated send method
+		// for each channel
+		public void SendOnChannel(Channel channel, byte[] data)
+		{
+			switch (channel)
+			{
+				case Channel.UNRELIABLE:
+					this.SendUnreliable(data);
+					break;
+				case Channel.UNRELIABLE_ORDERED:
+					this.SendUnreliableOrdered(data);
+					break;
+				case Channel.RELIABLE:
+					this.SendReliable(data);
+					break;
+				case Channel.RELIABLE_ORDERED:
+					this.SendReliableOrdered(data);
+					break;
+			}
 		}
 
 		// GetPing returns the current ping to this connection's socket

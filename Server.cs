@@ -11,19 +11,19 @@ namespace rmnp
 	class Server : RMNP
 	{
 		// ClientConnect is invoked when a new client connects.
-		public Action<Connection> ClientConnect;
+		public Action<Connection, byte[]> ClientConnect;
 
 		// ClientDisconnect is invoked when a client disconnects.
-		public Action<Connection> ClientDisconnect;
+		public Action<Connection, byte[]> ClientDisconnect;
 
 		// ClientTimeout is called when a client timed out. After that ClientDisconnect will be called.
-		public Action<Connection> ClientTimeout;
+		public Action<Connection, byte[]> ClientTimeout;
 
 		// ClientValidation is called when a new client connects to either accept or deny the connection attempt.
-		public Func<Connection, IPEndPoint, byte[], bool> ClientValidation;
+		public Func<IPEndPoint, byte[], bool> ClientValidation;
 
 		// PacketHandler is called when packets arrive to handle the received data.
-		public Action<Connection, byte[]> PacketHandler;
+		public Action<Connection, byte[], Connection.Channel> PacketHandler;
 
 		// NewServer creates and returns a new Server instance that will listen on the
 		// specified address and port. It does not start automatically.
@@ -51,29 +51,29 @@ namespace rmnp
 				connection.Conn.SendTo(buffer, connection.Addr);
 			};
 
-			this.OnConnect = (connection) =>
+			this.OnConnect = (connection, packet) =>
 			{
-				if (this.ClientConnect != null) this.ClientConnect(connection);
+				if (this.ClientConnect != null) this.ClientConnect(connection, packet);
 			};
 
-			this.OnDisconnect = (connection) =>
+			this.OnDisconnect = (connection, packet) =>
 			{
-				if (this.ClientDisconnect != null) this.ClientDisconnect(connection);
+				if (this.ClientDisconnect != null) this.ClientDisconnect(connection, packet);
 			};
 
-			this.OnTimeout = (connection) =>
+			this.OnTimeout = (connection, packet) =>
 			{
-				if (this.ClientTimeout != null) this.ClientTimeout(connection);
+				if (this.ClientTimeout != null) this.ClientTimeout(connection, packet);
 			};
 
-			this.OnValidation = (connection, addr, packet) =>
+			this.OnValidation = (addr, packet) =>
 			{
-				return this.ClientValidation != null ? this.ClientValidation(connection, addr, packet) : true;
+				return this.ClientValidation != null ? this.ClientValidation(addr, packet) : true;
 			};
 
-			this.OnPacket = (connection, packet) =>
+			this.OnPacket = (connection, packet, channel) =>
 			{
-				if (this.PacketHandler != null) this.PacketHandler(connection, packet);
+				if (this.PacketHandler != null) this.PacketHandler(connection, packet, channel);
 			};
 
 			this.Init(address);
