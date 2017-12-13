@@ -45,9 +45,9 @@ namespace rmnp
 				}
 			};
 
-			this.writeFunc = (Connection connection, ref byte[] buffer) =>
+			this.writeFunc = (Socket socket, IPEndPoint addr, ref byte[] buffer) =>
 			{
-				connection.Conn.SendTo(buffer, connection.Addr);
+				socket.SendTo(buffer, addr);
 			};
 
 			this.OnConnect = (connection, packet) =>

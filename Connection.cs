@@ -372,7 +372,7 @@ namespace rmnp
 
 			packet.CalculateHash();
 			byte[] buffer = packet.Serialize();
-			this.protocol.writeFunc(this, ref buffer);
+			this.protocol.writeFunc(this.Conn, this.Addr, ref buffer);
 			Interlocked.Add(ref Stats.StatSendBytes, buffer.Length);
 		}
 
@@ -458,6 +458,12 @@ namespace rmnp
 		public short GetPing()
 		{
 			return (short)(this.congestionHandler.RTT / 2);
+		}
+
+		// Disconnect disconnects the connection
+		public void Disconnect(byte[] packet)
+		{
+			Background.Execute(() => { this.protocol.DisconnectClient(this, false, packet); });
 		}
 	}
 }

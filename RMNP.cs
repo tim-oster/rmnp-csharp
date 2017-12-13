@@ -14,7 +14,7 @@ namespace rmnp
 	class RMNP
 	{
 		internal delegate void ReadFunc(Socket socket, ref byte[] buffer, out int length, out IPEndPoint addr, out bool next);
-		internal delegate void WriteFunc(Connection connection, ref byte[] buffer);
+		internal delegate void WriteFunc(Socket socket, IPEndPoint addr, ref byte[] buffer);
 
 		internal IPEndPoint Address;
 		internal Socket Socket;
@@ -62,13 +62,18 @@ namespace rmnp
 		{
 			if (this.Address == null) return;
 
-			lock (this.connectionsMutex)
-			{
-				foreach (Connection conn in new List<Connection>(this.connections.Values)) this.DisconnectClient(conn, true, null);
-			}
+			this.connectionsMutex.EnterWriteLock();
+			foreach (Connection conn in this.connections.Values) this.DisconnectClient(conn, true, null);
+			this.connections.Clear();
+			this.connectionsMutex.ExitWriteLock();
 
 			this.isRunning = false;
-			foreach (Thread thread in this.listeners) thread.Join();
+
+			// Very weired error where thread "exits" but join will lock forever regardless.
+			// Only occured during test in unity without an attached debugger. Will leave it like
+			// this for now because it should not cause any troubles especially because this library
+			// is intend to run on clients only anyway.
+			// foreach (Thread thread in this.listeners) thread.Join();
 
 			this.Socket.Close();
 			Background.Stop();
@@ -132,6 +137,7 @@ namespace rmnp
 					if (!Packet.ValidateHeader(packet)) continue;
 
 					Interlocked.Add(ref Stats.StatReceivedBytes, length);
+
 					this.HandlePacket(addr, packet);
 				}
 				catch
@@ -204,7 +210,7 @@ namespace rmnp
 			return connection;
 		}
 
-		private void DisconnectClient(Connection connection, bool shutdown, byte[] packet)
+		internal void DisconnectClient(Connection connection, bool shutdown, byte[] packet)
 		{
 			if (connection.State == Connection.ConnectionState.DISCONNECTED) return;
 
@@ -220,13 +226,16 @@ namespace rmnp
 
 			connection.StopRoutines();
 
-			uint hash = Util.AddrHash(connection.Addr);
+			if (!shutdown)
+			{
+				uint hash = Util.AddrHash(connection.Addr);
 
-			this.connectionsMutex.EnterWriteLock();
-			this.connections.Remove(hash);
-			this.connectionsMutex.ExitWriteLock();
+				this.connectionsMutex.EnterWriteLock();
+				this.connections.Remove(hash);
+				this.connectionsMutex.ExitWriteLock();
 
-			if (!shutdown && this.OnDisconnect != null) this.OnDisconnect(connection, packet);
+				if (this.OnDisconnect != null) this.OnDisconnect(connection, packet);
+			}
 
 			connection.Reset();
 			this.connectionPool.Put(connection);
