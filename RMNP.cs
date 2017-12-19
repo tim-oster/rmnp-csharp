@@ -89,7 +89,6 @@ namespace rmnp
 		protected void SetSocket(Socket socket)
 		{
 			this.Socket = socket;
-			this.Socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.ReuseAddress, true);
 			this.Socket.SendBufferSize = Config.CfgMTU;
 			this.Socket.ReceiveBufferSize = Config.CfgMTU;
 			this.Socket.Blocking = false;
