@@ -60,8 +60,8 @@ namespace rmnp
 		private Queue<Packet> sendQueue;
 		// no need for recvQeue because packets are handled in place
 
-		// Values allow to store custom data for fast and easy packet handling.
-		public Dictionary<byte, object> values;
+		private readonly object valuesMutex = new object();
+		private Dictionary<byte, object> values;
 
 		internal Connection()
 		{
@@ -209,7 +209,7 @@ namespace rmnp
 
 		private void KeepAlive()
 		{
-			// case < -time.After(CfgTimeoutThreshold * (time.Millisecond / 2)):
+			// case < -time.After((CfgTimeoutThreshold / 2) * time.Millisecond):
 
 			if (this.State == ConnectionState.DISCONNECTED)
 			{
@@ -464,6 +464,50 @@ namespace rmnp
 		public void Disconnect(byte[] packet)
 		{
 			Background.Execute(() => { this.protocol.DisconnectClient(this, false, packet); });
+		}
+
+		// Set stores a value associated with the given key in this connection instance.
+		// It is thread safe.
+		public void Set(byte key, object value)
+		{
+			lock (this.valuesMutex)
+			{
+				this.values[key] = value;
+			}
+		}
+		
+		// TrySet stores a value associated with the given key in this connection instance if does not exist yet.
+		// It returns whether it was able to set the value. It is thread safe.
+		public bool TrySet(byte key, object value)
+		{
+			lock (this.valuesMutex)
+			{
+				if (this.values.ContainsKey(key)) return false;
+
+				this.values[key] = value;
+				return true;
+			}
+		}
+
+		// Get retrieves a stored value from this connection instance and returns null if it does not exist.
+		// It is thread safe.
+		public object Get(byte key)
+		{
+			lock (this.valuesMutex)
+			{
+				if (!this.values.ContainsKey(key)) return null;
+				return this.values[key];
+			}
+		}
+
+		// Del deletes a stored value from this connection instance.
+		// It is thread safe.
+		public void Del(byte key)
+		{
+			lock (this.valuesMutex)
+			{
+				if (this.values.ContainsKey(key)) this.values.Remove(key);
+			}
 		}
 	}
 }
