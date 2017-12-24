@@ -58,7 +58,7 @@ namespace rmnp
 			this.OnDisconnect = (connection, packet) =>
 			{
 				if (this.ServerDisconnect != null) this.ServerDisconnect(connection, packet);
-				this.Destroy();
+				Background.Execute(() => this.Destroy());
 			};
 
 			this.OnTimeout = (connection, packet) =>

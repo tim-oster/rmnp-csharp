@@ -57,6 +57,9 @@ namespace rmnp
 			lock (mutex) actions.Clear();
 			isRunning = false;
 			thread = null;
+
+			// Does not wait for thread to exit because otherwise Background would deadlock if you try to call 'stop'
+			// from a Background invocation
 		}
 	}
 }
