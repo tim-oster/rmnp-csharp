@@ -20,6 +20,7 @@ namespace rmnp
 		internal Socket Socket;
 
 		private bool isRunning = false;
+		private WaitGroup waitGroup = new WaitGroup();
 		private List<Thread> listeners;
 
 		private readonly ReaderWriterLockSlim connectionsMutex = new ReaderWriterLockSlim();
@@ -62,18 +63,13 @@ namespace rmnp
 		{
 			if (this.Address == null) return;
 
+			this.isRunning = false;
+			this.waitGroup.Wait();
+
 			this.connectionsMutex.EnterWriteLock();
 			foreach (Connection conn in this.connections.Values) this.DisconnectClient(conn, true, null);
 			this.connections.Clear();
 			this.connectionsMutex.ExitWriteLock();
-
-			this.isRunning = false;
-
-			// Very weired error where thread "exits" but join will lock forever regardless.
-			// Only occured during test in unity without an attached debugger. Will leave it like
-			// this for now because it should not cause any troubles especially because this library
-			// is intend to run on clients only anyway.
-			// foreach (Thread thread in this.listeners) thread.Join();
 
 			this.Socket.Close();
 			Background.Stop();
@@ -108,6 +104,7 @@ namespace rmnp
 
 		private void ListeningWorker()
 		{
+			this.waitGroup.Start();
 			Interlocked.Increment(ref Stats.StatRunningGoRoutines);
 
 			while (this.isRunning)
@@ -146,6 +143,7 @@ namespace rmnp
 			}
 
 			Interlocked.Decrement(ref Stats.StatRunningGoRoutines);
+			this.waitGroup.End();
 		}
 
 		private void HandlePacket(IPEndPoint addr, byte[] packet)
