@@ -6,6 +6,8 @@ using System;
 using System.Net;
 using System.Net.Sockets;
 
+#pragma warning disable 649
+
 namespace rmnp
 {
 	class Server : RMNP
@@ -96,3 +98,5 @@ namespace rmnp
 		}
 	}
 }
+
+#pragma warning restore 649
