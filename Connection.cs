@@ -11,7 +11,7 @@ namespace rmnp
 {
 	public class Connection
 	{
-		public enum ConnectionState
+		internal enum ConnectionState
 		{
 			DISCONNECTED,
 			CONNECTING,
@@ -27,7 +27,9 @@ namespace rmnp
 		}
 
 		private RMNP protocol;
-		public ConnectionState State;
+
+		private readonly ReaderWriterLockSlim stateMutex = new ReaderWriterLockSlim();
+		private ConnectionState state;
 
 		public Socket Conn;
 		public IPEndPoint Addr;
@@ -56,8 +58,7 @@ namespace rmnp
 		private SequenceBuffer receiveBuffer;
 		private CongestionHandler congestionHandler;
 
-		private readonly object sendQueueMutex = new object();
-		private Queue<Packet> sendQueue;
+		private DropChannel<Packet> sendQueue;
 		// no need for recvQeue because packets are handled in place
 
 		private readonly object valuesMutex = new object();
@@ -65,12 +66,12 @@ namespace rmnp
 
 		internal Connection()
 		{
-			this.State = ConnectionState.DISCONNECTED;
+			this.state = ConnectionState.DISCONNECTED;
 			this.orderedChain = new Chain(Config.CfgMaxPacketChainLength);
 			this.sendBuffer = new SendBuffer();
 			this.receiveBuffer = new SequenceBuffer(Config.CfgSequenceBufferSize);
 			this.congestionHandler = new CongestionHandler();
-			this.sendQueue = new Queue<Packet>();
+			this.sendQueue = new DropChannel<Packet>(Config.CfgMaxSendReceiveQueueSize);
 			this.values = new Dictionary<byte, object>();
 		}
 
@@ -79,7 +80,7 @@ namespace rmnp
 			this.protocol = impl;
 			this.Conn = impl.Socket;
 			this.Addr = addr;
-			this.State = ConnectionState.CONNECTING;
+			this.state = ConnectionState.CONNECTING;
 
 			long t = Util.CurrentTime();
 			this.lastAckSendTime = t;
@@ -90,7 +91,7 @@ namespace rmnp
 		internal void Reset()
 		{
 			this.protocol = null;
-			this.State = ConnectionState.DISCONNECTED;
+			this.state = ConnectionState.DISCONNECTED;
 
 			this.Conn = null;
 			this.Addr = null;
@@ -114,8 +115,7 @@ namespace rmnp
 			this.lastChainTime = 0;
 			this.pingPacketInterval = 0;
 
-			lock (this.sendQueueMutex) this.sendQueue.Clear();
-
+			this.sendQueue.Clear();
 			this.values.Clear();
 		}
 
@@ -154,13 +154,7 @@ namespace rmnp
 
 		private void SendUpdate()
 		{
-			Packet toSend = null;
-
-			lock (this.sendQueueMutex)
-			{
-				if (this.sendQueue.Count > 0) toSend = this.sendQueue.Dequeue();
-			}
-
+			Packet toSend = this.sendQueue.Pop();
 			if (toSend != null) this.ProcessSend(toSend, false);
 			else Thread.Sleep((int)Config.CfgUpdateLoopTimeout);
 
@@ -180,7 +174,7 @@ namespace rmnp
 				});
 			}
 
-			if (this.State != ConnectionState.CONNECTED) return;
+			if (this.GetState() != ConnectionState.CONNECTED) return;
 
 			if (currentTime - this.lastChainTime > Config.CfgChainSkipTimeout)
 			{
@@ -211,7 +205,7 @@ namespace rmnp
 		{
 			// case < -time.After((CfgTimeoutThreshold / 2) * time.Millisecond):
 
-			if (this.State == ConnectionState.DISCONNECTED)
+			if (this.GetState() == ConnectionState.DISCONNECTED)
 			{
 				return;
 			}
@@ -222,7 +216,7 @@ namespace rmnp
 			{
 				// needs to be executed in goroutine; otherwise this method could not exit and therefore deadlock
 				// the connection's waitGroup
-				Background.Execute(() => { if (this.protocol != null) this.protocol.TimeoutClient(this); });
+				Background.Execute(() => { if (this.protocol != null) this.protocol.DisconnectClient(this, RMNP.DisconnectType.TIMEOUT, null); });
 			}
 		}
 
@@ -354,7 +348,7 @@ namespace rmnp
 						this.orderedSequence++;
 					}
 
-					this.sendBuffer.Add(packet, this.State != ConnectionState.CONNECTED);
+					this.sendBuffer.Add(packet, this.GetState() != ConnectionState.CONNECTED);
 				}
 				else if (packet.Flag(Packet.PacketDescriptor.ORDERED))
 				{
@@ -378,10 +372,7 @@ namespace rmnp
 
 		private void SendPacket(Packet packet)
 		{
-			lock (this.sendQueueMutex)
-			{
-				this.sendQueue.Enqueue(packet);
-			}
+			this.sendQueue.Push(packet);
 		}
 
 		internal void SendLowLevelPacket(Packet.PacketDescriptor descriptor)
@@ -400,6 +391,36 @@ namespace rmnp
 		private void SendAckPacket()
 		{
 			this.SendLowLevelPacket(Packet.PacketDescriptor.ACK);
+		}
+
+		internal ConnectionState GetState()
+		{
+			this.stateMutex.EnterReadLock();
+			ConnectionState state = this.state;
+			this.stateMutex.ExitReadLock();
+			return state;
+		}
+
+		internal void SetState(ConnectionState state)
+		{
+			this.stateMutex.EnterWriteLock();
+			this.state = state;
+			this.stateMutex.ExitWriteLock();
+		}
+
+		internal bool UpdateState(ConnectionState state)
+		{
+			this.stateMutex.EnterWriteLock();
+
+			if (this.state != state)
+			{
+				this.state = state;
+				this.stateMutex.ExitWriteLock();
+				return true;
+			}
+
+			this.stateMutex.ExitWriteLock();
+			return false;
 		}
 
 		// SendUnreliable sends the data with no guarantee whether it arrives or not.
@@ -463,7 +484,7 @@ namespace rmnp
 		// Disconnect disconnects the connection
 		public void Disconnect(byte[] packet)
 		{
-			Background.Execute(() => { this.protocol.DisconnectClient(this, false, packet); });
+			Background.Execute(() => { this.protocol.DisconnectClient(this, RMNP.DisconnectType.DEFAULT, packet); });
 		}
 
 		// Set stores a value associated with the given key in this connection instance.
@@ -491,11 +512,11 @@ namespace rmnp
 
 		// Get retrieves a stored value from this connection instance and returns null if it does not exist.
 		// It is thread safe.
-		public object Get(byte key)
+		public object Get(byte key, object fallback = null)
 		{
 			lock (this.valuesMutex)
 			{
-				if (!this.values.ContainsKey(key)) return null;
+				if (!this.values.ContainsKey(key)) return fallback;
 				return this.values[key];
 			}
 		}
