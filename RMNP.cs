@@ -188,10 +188,8 @@ namespace rmnp
 					if (this.OnConnect != null) this.OnConnect(connection, packet.Skip(header).ToArray());
 					this.connectGuard.Finish(hash);
 				}
-				else
-				{
-					return;
-				}
+
+				return;
 			}
 
 			if ((packet[5] & (byte)Packet.PacketDescriptor.DISCONNECT) != 0)
