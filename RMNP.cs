@@ -11,7 +11,7 @@ using System.Threading;
 
 namespace rmnp
 {
-	class RMNP
+	public class RMNP
 	{
 		internal enum DisconnectType
 		{
@@ -46,6 +46,8 @@ namespace rmnp
 		internal Action<Connection, byte[]> OnTimeout;
 		internal Func<IPEndPoint, byte[], bool> OnValidation;
 		internal Action<Connection, byte[], Connection.Channel> OnPacket;
+
+		protected RMNP() { }
 
 		protected void Init(string address)
 		{

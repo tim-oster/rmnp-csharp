@@ -10,7 +10,7 @@ using System.Net.Sockets;
 
 namespace rmnp
 {
-	class Server : RMNP
+	public class Server : RMNP
 	{
 		// ClientConnect is invoked when a new client connects.
 		public Action<Connection, byte[]> ClientConnect;

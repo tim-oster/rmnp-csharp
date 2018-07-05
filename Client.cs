@@ -10,7 +10,7 @@ using System.Net.Sockets;
 
 namespace rmnp
 {
-	class Client : RMNP
+	public class Client : RMNP
 	{
 		// Server is the Connection to the server (nil if not connected).
 		public Connection Server;
