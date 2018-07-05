@@ -33,6 +33,7 @@ namespace rmnp
 
 		public Socket Conn;
 		public IPEndPoint Addr;
+		public bool IsServer;
 
 		// for threading
 		private bool isRunning;
@@ -95,6 +96,7 @@ namespace rmnp
 
 			this.Conn = null;
 			this.Addr = null;
+			this.IsServer = false;
 
 			this.orderedChain.Reset();
 			this.sendBuffer.Reset();
@@ -150,6 +152,12 @@ namespace rmnp
 		{
 			this.isRunning = false;
 			this.thread.Join();
+		}
+
+		internal void OnSuccessfulConnect()
+		{
+			this.sendBuffer.Reset();
+			this.sendQueue.Clear();
 		}
 
 		private void SendUpdate()

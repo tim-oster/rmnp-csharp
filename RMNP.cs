@@ -185,6 +185,10 @@ namespace rmnp
 				if (connection.UpdateState(Connection.ConnectionState.CONNECTED))
 				{
 					int header = Packet.HeaderSize(packet);
+
+					// clear buffers so all remaining connection packets are deleted
+					if (connection.IsServer) connection.OnSuccessfulConnect();
+					
 					if (this.OnConnect != null) this.OnConnect(connection, packet.Skip(header).ToArray());
 					this.connectGuard.Finish(hash);
 				}

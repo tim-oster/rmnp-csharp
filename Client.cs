@@ -90,6 +90,7 @@ namespace rmnp
 			this.SetSocket(new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp));
 			this.Listen();
 			this.Server = this.ConnectClient(this.Address, data);
+			this.Server.IsServer = true;
 		}
 
 		// Disconnect immediately disconnects from the server. It invokes no callbacks.
